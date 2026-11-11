@@ -2,7 +2,7 @@
 
 A shareable, Figma style, interactive proof of concept of Clocked as the shared decision layer across Rezolve.ai service workflows.
 
-This is **not a production system**. The interface is a deterministic, offline simulation. It makes proposed decision criteria visible so stakeholders can discuss the product vision without requiring live AI APIs, customer records, ticket systems, identity providers or telephony.
+This is **not a production system**. The demo uses a synthetic catalog and simulated operational actions. Decision Studio can now call the real Clocked SDK for intent decisions and offering relevance through a protected Vercel Python function; all ticket, identity, voice and asset actions remain simulated. Without server environment variables and a reviewer access code, the decision view remains a local demonstration.
 
 ## The same synthetic dataset
 
@@ -40,7 +40,7 @@ The workbook source is included under `source_data/` for comparison. All profile
 
 ## Quick start
 
-Open `index.html` in a modern browser. It loads `data.js`, `app.js` and `styles.css` from the same folder. No server installation or network connection is required. Alternatively, open the separate `clocked_project2_preview.html` file included with the delivery; it embeds everything in one file.
+Open `index.html` in a modern browser. It loads `data.js`, `app.js` and `styles.css` from the same folder. Opening as a local file shows only the synthetic simulation. To call the Clocked SDK, deploy to Vercel and configure the secure server function. Alternatively, open the separate `clocked_project2_preview.html` file included with the delivery; it embeds everything in one file.
 
 If local browser security settings prevent local files from opening, serve the folder from a local static server, e.g. `python -m http.server 8000`, then visit `http://localhost:8000`.
 
@@ -48,13 +48,13 @@ If local browser security settings prevent local files from opening, serve the f
 
 1. Create a new repository named `clocked-project-2` under the desired account.
 2. Upload this project's files to the repository root, including `index.html`, `data.js`, `app.js`, `styles.css`, and `vercel.json`.
-3. In Vercel, import the GitHub repository. Use a static project with the root directory set to the repository root. No build command, API key or environment variable is required.
-4. Deploy, then check Overview, Decision Studio, T003, VoiceIQ continuation, Agent Studio, and Feedback.
+3. In Vercel, import the GitHub repository with root `./`, preset Other, and keep `api/clocked.py` and `requirements.txt`. Set `CLOCKED_API_KEY` and a separate `DEMO_ACCESS_TOKEN` as secret environment variables (never commit either).
+4. Deploy, enter the reviewer access code in Decision Studio, and verify a REAL CLOCKED API response. Then check Overview, T003, VoiceIQ continuation, Agent Studio and Feedback; those paths remain simulated beyond the SDK steps.
 5. Keep the project explicitly labelled as simulated and share it only with the intended audience.
 
-Do not copy a production API key into the static site. Static JavaScript is visible to anyone with access to the page.
+Do not copy a production API key into static JavaScript. The key must exist only in Vercel environment variables and server code. Read DEPLOY_REAL_CLOCKED.md for the exact steps and limitations.
 
-The connected GitHub access used to inspect the original repository was read only, so this delivery is a downloadable local project, not a pushed GitHub repository or confirmed Vercel deployment.
+This ZIP is a downloadable update to the GitHub repository. It does not prove a deployment or real API call succeeded.
 
 ## Validation
 

@@ -1,6 +1,9 @@
 'use strict';
 
 const DB=window.CLOCKED_DATA;
+// Browser never receives the Clocked API key. The reviewer's access code remains in memory only.
+let demoAccessCode='';
+let liveRequestId=0;
 const $=id=>document.getElementById(id);
 const OFFERS=[...DB.incident_offers,...DB.service_offers];
 const stop=new Set('a an the i my me we our and to for on in is it does not please help need want with get of from about would should am are can you could have has that this it an new issue request service laptop computer software hardware'.split(' '));
@@ -27,7 +30,7 @@ const KB=[
  {id:'KB007',name:'Shared drive access',tags:['shared drive','permission','file'],desc:'A sample knowledge result for inaccessible shared drives.'}
 ];
 const initialCase=DB.demo_cases.find(x=>x.case_id==='T003');
-const state={page:'overview',userId:'DEMO001',caseId:'T003',utterance:initialCase.user_query,channel:'VoiceIQ',decision:null,step:0,assetId:null,stage:'intro',voiceType:'recognized',voiceNote:'',showAllAssets:false,searchUsers:'',searchCatalog:'',catalogId:'INC001',ticketFilter:'All',feedback:[],tickets:sampleTickets.map(x=>({...x})),navHistory:['overview']};
+const state={page:'overview',userId:'DEMO001',caseId:'T003',utterance:initialCase.user_query,channel:'VoiceIQ',decision:null,step:0,assetId:null,stage:'intro',voiceType:'recognized',voiceNote:'',showAllAssets:false,searchUsers:'',searchCatalog:'',catalogId:'INC001',ticketFilter:'All',feedback:[],apiResult:null,apiStatus:'not-run',tickets:sampleTickets.map(x=>({...x})),navHistory:['overview']};
 try{state.feedback=JSON.parse(localStorage.getItem('clocked_p2_feedback')||'[]')}catch(e){state.feedback=[]}
 const ICON={user:'♙',asset:'▣',ticket:'▤',voice:'◖',knowledge:'▧',chat:'◎'};
 function esc(x){return String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -48,7 +51,7 @@ function button(label,action,cls='btn',attrs=''){return `<button type="button" c
 function kpi(n,title){return `<div class="stats-card"><div class="stat-value">${n}</div><div class="stat-label">${title}</div></div>`}
 function opt(items,value,label,valueKey){return items.map(x=>`<option value="${esc(x[valueKey])}" ${String(x[valueKey])===String(value)?'selected':''}>${esc(x[label])}</option>`).join('')}
 function card(title,content,cl=''){return `<section class="card ${cl}"><div class="card-head"><h3>${title}</h3></div>${content}</section>`}
-function notice(){return `<p class="footer-note">Proof of concept only. All people, assets and catalog records are fictional. Ticket actions, matching, statuses, knowledge summaries and Chat/Voice interactions are simulated. The experience does not use a live Clocked API, call routing or ITSM backend.</p>`}
+function notice(){return `<p class="footer-note">Proof of concept. All people, assets and catalog records are fictional; all ticket changes and VoiceIQ handoffs remain simulated. In live mode, only intent assessment and offering reranking call the real Clocked API through Vercel. Other decisions remain local demonstrations.</p>`}
 
 function evaluate(utterance,exactCase){
  const q=String(utterance||'').trim();const t=tokens(q);const tset=new Set(t);
@@ -81,7 +84,25 @@ function evaluate(utterance,exactCase){
  else rec='Ask a targeted question; no valid catalog choice has been established.';
  return {q,caseId:current?.case_id||null,route,selected,candidates,assets:affected,needsAsset,allAssets,related,mm,cat:mm?cat(mm.category_id):null,sub:mm?sub(mm.subcategory_id):null,fields:selected?fields(selected.offering_id):[],rec,source:current?'Existing expected test case':'Illustrative text matching',channel:state.channel};
 }
-function doEvaluate(){state.decision=evaluate(state.utterance,getCase());state.step=0;state.assetId=null;notify('Scenario evaluated against the shared synthetic data');render()}
+async function doEvaluate(){
+ state.decision=evaluate(state.utterance,getCase());state.step=0;state.assetId=null;
+ state.apiResult=null;state.apiStatus='pending';render();
+ const id=++liveRequestId;
+ if(!demoAccessCode){state.apiStatus='access-needed';render();notify('Enter your demo access code to run real Clocked decisions');return}
+ const choices=state.decision.candidates.filter(x=>x.o).map(x=>({id:x.o.offering_id,title:x.o.offering_name,text:String(x.o.description||'')+' '+String(x.o.synonyms||'')})).slice(0,8);
+ // Always present a real, bounded catalog to the SDK; never fabricate an API decision.
+ if(!choices.length){state.apiStatus='no-candidates';render();return}
+ try{
+  const resp=await fetch('/api/clocked',{method:'POST',headers:{'Content-Type':'application/json','X-Demo-Access':demoAccessCode},body:JSON.stringify({utterance:state.utterance,candidates:choices})});
+  const result=await resp.json();if(id!==liveRequestId)return;
+  if(!resp.ok){state.apiStatus='error';state.apiResult={error:result.error||('HTTP '+resp.status)};render();return}
+  state.apiResult=result;state.apiStatus='live';
+  // Apply an API choice only if it belongs to the validated shortlist. Preserve local catalog ownership.
+  const matching=(result.offerings||[]).find(x=>x.action==='use'&&Number(x.relevance_score)>=.36&&choices.some(o=>o.id===x.id));
+  if(matching){const selected=offer(matching.id);const mm=mapping(matching.id);state.decision.selected=selected;state.decision.mm=mm;state.decision.cat=mm?cat(mm.category_id):null;state.decision.sub=mm?sub(mm.subcategory_id):null;state.decision.fields=fields(matching.id);state.decision.source='Real Clocked rerank with local catalog validation';state.decision.rec=`Clocked ranked ${selected.offering_id} as relevant. Validate mandatory fields, assets, existing tickets, and user confirmation before an action.`}
+  render();notify('Real Clocked API results received');
+ }catch(e){if(id!==liveRequestId)return;state.apiStatus='error';state.apiResult={error:'Network or server connection failed'};render()}
+}
 function go(page){state.page=page;state.navHistory.push(page);render();window.scrollTo({top:0,behavior:'instant'})}
 function notify(message){const e=$('toast');e.textContent=message;e.classList.add('show');clearTimeout(notify.handle);notify.handle=setTimeout(()=>e.classList.remove('show'),3000)}
 function render(){const names={overview:'Overview',studio:'Decision Studio',voice:'VoiceIQ Simulator',tickets:'Ticket Management',assets:'Asset Management',users:'User Management',knowledge:'Bot Knowledge',livechat:'Live Chat',agent:'Agent Studio',framework:'Bot Framework',feedback:'Feedback'};
@@ -112,7 +133,7 @@ function renderStudio(){const d=state.decision;const c=getCase();
  content=`<section class="card"><div class="card-head"><h3>Clocked decision journey</h3><span class="pill blue">${esc(d.caseId||'CUSTOM INPUT')}</span></div>${base}${body}<div class="action-row">${state.step>0?button('← Previous','previous-step','btn ghost sm'):''}${state.step<3?button('Next decision →','next-step','btn sm'):''}</div></section>`
  }else content=`<section class="card"><div class="empty"><strong>Run a scenario to see Clocked's decision journey</strong>Input from the shared data will be evaluated against the configured catalog and user context.</div></section>`;
  return `${pageHeader('Decision Studio','CENTRAL INTELLIGENCE','Review the request, candidate offerings, owned assets, valid catalog hierarchy, existing tickets and next action. Every step identifies the evidence it uses.','<span class="pill purple">Evidence view</span>')}
- <section class="card" style="margin-bottom:17px"><div class="card-head"><h3>Scenario workspace</h3><span class="pill">No live connections</span></div><div class="grid cols3"><div class="formfield"><label for="scenario">Reference case</label><select class="field" id="scenario">${choices}</select></div><div class="formfield"><label for="demo-user">Synthetic user</label><select class="field" id="demo-user">${users}</select></div><div class="formfield"><label for="channel">Entry channel</label><select class="field" id="channel">${['VoiceIQ','Chatbot','Service Portal','Live Chat'].map(x=>`<option ${x===state.channel?'selected':''}>${x}</option>`).join('')}</select></div></div><div class="formfield" style="margin-top:16px"><label for="utterance">What does the user say?</label><textarea class="field" id="utterance" rows="2">${esc(state.utterance)}</textarea></div><div class="action-row">${button('✳ Run Clocked Decision','run-decision')}${button('Reset to T003','open-t003','btn ghost')}</div><p class="tiny" style="margin-top:10px">Existing test cases provide expected outcomes. Custom phrases use simple local matching and should not be treated as actual AI decisions.</p></section>
+ <section class="card" style="margin-bottom:17px"><div class="card-head"><h3>Scenario workspace</h3><span class="pill">${state.apiStatus==='live'?'Real Clocked API':state.apiStatus==='pending'?'Contacting Clocked':'API not yet verified'}</span></div><div class="grid cols3"><div class="formfield"><label for="scenario">Reference case</label><select class="field" id="scenario">${choices}</select></div><div class="formfield"><label for="demo-user">Synthetic user</label><select class="field" id="demo-user">${users}</select></div><div class="formfield"><label for="channel">Entry channel</label><select class="field" id="channel">${['VoiceIQ','Chatbot','Service Portal','Live Chat'].map(x=>`<option ${x===state.channel?'selected':''}>${x}</option>`).join('')}</select></div></div><div class="formfield" style="margin-top:16px"><label for="utterance">What does the user say?</label><textarea class="field" id="utterance" rows="2">${esc(state.utterance)}</textarea></div><div class="formfield" style="margin-top:12px"><label for="demo-access">Demo access code (not the Clocked API key)</label><input type="password" class="field" id="demo-access" autocomplete="off" placeholder="Enter access code set in Vercel" value="${esc(demoAccessCode)}"></div><div class="action-row">${button('✳ Run Clocked Decision','run-decision')}${button('Reset to T003','open-t003','btn ghost')}</div><p class="tiny" style="margin-top:10px">The inspector separates real API calls from local decision criteria. All operational actions remain simulated.</p></section>
  ${content}${notice()}`}
 
 function renderTickets(){const records=state.tickets.filter(x=>state.ticketFilter==='All'||x.status===state.ticketFilter);const d=state.decision;const mm=d?.selected?mapping(d.selected.offering_id):null;
@@ -170,11 +191,12 @@ function renderInspector(){const d=state.decision;let timeline=[];if(d){timeline
  $('inspector-body').innerHTML=`<div class="inspector-group"><div class="mini-label">Active user context</div><div class="inspector-user"><div class="avatar">${esc(state.userId.slice(-2))}</div><div><strong>${esc(user().display_name)}</strong><small>${esc(state.userId)} · ${esc(user().department)}</small></div></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:12px"><span class="tag">${owned().length} devices</span><span class="tag">${esc(user().location)}</span></div></div>
  <div class="inspector-group"><div class="mini-label">Currently connected modules</div><div class="list" style="gap:6px">${['User Management','Ticket Management','Asset Management','Bot Knowledge'].map((m,i)=>`<div class="active-module ${d?'now':''}"><span>${i%2?'▤':'◈'}</span>${m}</div>`).join('')}</div></div>
  <div class="inspector-group"><div class="mini-label">Visible decision checkpoints</div>${d?`<div>${timeline.map(([t,s],i)=>`<div class="timeline-item"><div class="timeline-line"><div class="timeline-dot"></div><div class="timeline-stick"></div></div><div class="timeline-content"><strong>${t}</strong><p>${s}</p></div></div>`).join('')}</div>`:`<div class="empty" style="padding:5px 0;text-align:left;font-size:11px">Run a scenario to reveal the evidence used to recommend the next step.</div>`}</div>
+ <div class="inspector-group"><div class="mini-label">Clocked API evidence</div><div class="trace-result"><strong>${state.apiStatus==='live'?'REAL CLOCKED API':state.apiStatus==='pending'?'CONTACTING CLOCKED':state.apiStatus==='error'?'API ERROR':'LOCAL DEMO'}</strong>${state.apiStatus==='live'?`<p>SDK methods: decide and rerank. Ranked offerings: ${(state.apiResult.offerings||[]).map(x=>esc(x.id)+' ('+esc(x.relevance_score)+')').join(', ')||'None selected'}</p><p>Intent result: ${esc(JSON.stringify(state.apiResult.intent||{}))}</p>`:state.apiStatus==='error'?`<p>${esc(state.apiResult?.error||'Request failed')}</p>`:`<p>${state.apiStatus==='access-needed'?'Enter the reviewer access code in Decision Studio.':'The catalog and workflow preview remain local until a successful SDK request.'}</p>`}</div></div>
  <div class="inspector-group" style="border:0"><div class="mini-label">Decision output</div><div class="trace-result"><strong>${d?'Recommendation prepared':'Awaiting scenario'}</strong><p>${d?esc(d.rec):'Select a test case in Decision Studio, or start the VoiceIQ journey.'}</p></div><p class="tiny" style="margin-top:10px">${d?`${esc(d.source)} · ${esc(d.caseId||'Custom phrase')}`:'Source: 46 reference scenarios from the synthetic workbook'}</p></div>`;
 }
 
-function setCase(id){const c=DB.demo_cases.find(x=>x.case_id===id);if(!c)return;state.caseId=id;state.userId=c.user_id;state.utterance=c.user_query;state.decision=null;state.assetId=null;state.step=0;render()}
-function startVoice(kind='recognized'){state.voiceType=kind;state.stage='intro';state.voiceTicket=null;state.voiceDoneMessage='';state.voiceNote='';state.decision=null;state.assetId=null;go('voice')}
+function setCase(id){++liveRequestId;state.apiResult=null;state.apiStatus='not-run';const c=DB.demo_cases.find(x=>x.case_id===id);if(!c)return;state.caseId=id;state.userId=c.user_id;state.utterance=c.user_query;state.decision=null;state.assetId=null;state.step=0;render()}
+function startVoice(kind='recognized'){++liveRequestId;state.apiResult=null;state.apiStatus='not-run';state.voiceType=kind;state.stage='intro';state.voiceTicket=null;state.voiceDoneMessage='';state.voiceNote='';state.decision=null;state.assetId=null;go('voice')}
 function exportFeedback(){const blob=new Blob([JSON.stringify({project:'Clocked Studio Project 2',exported:new Date().toISOString(),feedback:state.feedback},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='clocked_project2_feedback.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);notify('Local feedback exported')}
 
 const actions={
@@ -182,7 +204,7 @@ const actions={
  'open-t003':()=>{setCase('T003');state.decision=evaluate(state.utterance,getCase());state.step=0;go('studio')},
  'voice-existing':()=>{setCase('T003');state.decision=evaluate(state.utterance,getCase());startVoice('recognized')},
  'voice-current':()=>{state.stage='intro';state.voiceType='recognized';go('voice')},
- 'run-decision':doEvaluate,'next-step':()=>{state.step=Math.min(3,state.step+1);render()},'previous-step':()=>{state.step=Math.max(0,state.step-1);render()},'reset-decision':()=>{state.decision=null;render()},
+ 'run-decision':doEvaluate,'next-step':()=>{state.step=Math.min(3,state.step+1);render()},'previous-step':()=>{state.step=Math.max(0,state.step-1);render()},'reset-decision':()=>{state.decision=null;state.apiResult=null;state.apiStatus='not-run';render()},
  'toggle-assets':()=>{state.showAllAssets=!state.showAllAssets;render()},
  'find-users':()=>{state.searchUsers=$('user-search').value.trim();render()},
  'search-catalog':()=>{state.searchCatalog=$('catalog-search').value.trim();render()},
@@ -223,6 +245,7 @@ $('main').addEventListener('change',e=>{
  else if(e.target.id==='ticket-filter'){state.ticketFilter=e.target.value;render()}
 });
 $('main').addEventListener('input',e=>{
+ if(e.target.id==='demo-access')demoAccessCode=e.target.value;
  if(e.target.id==='utterance')state.utterance=e.target.value;
  if(e.target.id==='user-search')state.searchUsers=e.target.value;
  if(e.target.id==='catalog-search')state.searchCatalog=e.target.value;
