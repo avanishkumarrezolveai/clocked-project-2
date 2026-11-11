@@ -1,23 +1,27 @@
-# Project 2: Real Clocked SDK integration
+# Clocked Project 2: public demo using real Clocked API
 
-This upgrade reuses Project 1 SDK version `clocked-sdk==0.7.0` and its `decide` and `rerank` method signatures, without copying the previous project's secret. All user profiles, catalog items, assets and sample tickets remain synthetic. Operational actions stay simulated.
+## Requirements
 
-## Set up on Vercel
+This project uses the same `clocked-sdk==0.7.0` integration family as Project 1. The website is static, while `api/clocked.py` is a Vercel Python function that calls `decide` and `rerank`. All ticket actions and VoiceIQ interactions are demonstrations, not live systems.
 
-1. Commit **all the files in this updated package** to your existing `clocked-project-2` repository, preserving `api/clocked.py` and root `requirements.txt`.
-2. Import that repository into Vercel with Other preset and root directory `./`. No build command needed.
-3. Under Vercel Environment Variables add **CLOCKED_API_KEY** with the real key as a secret value. Add **DEMO_ACCESS_TOKEN** with a separate strong reviewer access code. The access code is **not the API key**. Set for Production and Preview as needed.
-4. Deploy or Redeploy. Open Decision Studio, enter the reviewer access code, then run a case.
-5. Confirm inspector says `REAL CLOCKED API` and shows SDK `decide` and `rerank` results. A local fallback or API ERROR does not count as a successful live result.
+## Deployment
 
-Important: Vercel project is public. `DEMO_ACCESS_TOKEN` protects the paid API endpoint from casual anonymous use. Share this access code only with trusted reviewers. For stronger access control, use Vercel deployment protection and server side rate limiting. Never commit the Clocked key, put it in `data.js` or browser code, or share it in chat. Vercel will protect the key as long as it is only referenced by server code.
+1. Copy the full contents of this ZIP into your existing `clocked-project-2` GitHub repository, replacing older files. Commit and push to the main branch.
+2. In Vercel Settings > Environment Variables, set **CLOCKED_API_KEY** to your real Clocked API key. Keep it secret and never put it in public JavaScript or GitHub files.
+3. **DEMO_ACCESS_TOKEN is no longer required.** You may remove that old environment variable. The website does not prompt for an access code.
+4. Redeploy the latest GitHub commit if Vercel does not automatically deploy it.
+5. Open Decision Studio and click Run Clocked Decision. Confirm the inspector says REAL CLOCKED API and shows results for `decide` and `rerank`. An API ERROR is not a successful call.
 
-The Cloud function does not create real tickets, use a real asset CMDB, or connect to actual telephony. Only intent classification and offering relevance use the real SDK. Local fields and routing remain concept demonstrations.
+## Important public access warning
 
-## Verify
+There is no user authentication or access code on this version. Anyone who can reach `/api/clocked` can make your deployment incur Clocked API usage. The key itself remains server side, but an exposed API route can be abused. Before sharing widely, enable available Vercel Firewall rate limiting for `/api/clocked`, usage alerts or spending limits at the Clocked provider, and consider deployment authentication if needed. Application code does not implement durable distributed rate limiting.
 
-1. Check `https://YOUR_VERCEL_DOMAIN/api/clocked` with GET; it should not return a normal decision. It accepts POST requests only.
-2. Without a reviewer access code the POST endpoint must return `401`.
-3. With valid access it should return `source: REAL CLOCKED API` and structured SDK evidence.
-4. Test the Dell T003 case and a service request such as Visio; check whether every suggested offering belongs to the catalog.
-5. If the API errors, check Vercel Function Logs and verify SDK key and quota. Do not share secrets or raw authorization headers.
+## Validation
+
+`node --check app.js`
+
+`node test_logic.js`
+
+`python -m py_compile api/clocked.py`
+
+These tests cannot prove a live Clocked response without the real key and a successful deployed request.

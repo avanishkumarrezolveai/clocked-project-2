@@ -2,7 +2,7 @@
 
 A shareable, Figma style, interactive proof of concept of Clocked as the shared decision layer across Rezolve.ai service workflows.
 
-This is **not a production system**. The demo uses a synthetic catalog and simulated operational actions. Decision Studio can now call the real Clocked SDK for intent decisions and offering relevance through a protected Vercel Python function; all ticket, identity, voice and asset actions remain simulated. Without server environment variables and a reviewer access code, the decision view remains a local demonstration.
+This is **not a production system**. The demo uses a synthetic catalog and simulated operational actions. Decision Studio can now call the real Clocked SDK for intent decisions and offering relevance through a Vercel Python function; all ticket, identity, voice and asset actions remain simulated. Without the server environment variable, the decision view remains a local demonstration.
 
 ## The same synthetic dataset
 
@@ -48,8 +48,8 @@ If local browser security settings prevent local files from opening, serve the f
 
 1. Create a new repository named `clocked-project-2` under the desired account.
 2. Upload this project's files to the repository root, including `index.html`, `data.js`, `app.js`, `styles.css`, and `vercel.json`.
-3. In Vercel, import the GitHub repository with root `./`, preset Other, and keep `api/clocked.py` and `requirements.txt`. Set `CLOCKED_API_KEY` and a separate `DEMO_ACCESS_TOKEN` as secret environment variables (never commit either).
-4. Deploy, enter the reviewer access code in Decision Studio, and verify a REAL CLOCKED API response. Then check Overview, T003, VoiceIQ continuation, Agent Studio and Feedback; those paths remain simulated beyond the SDK steps.
+3. In Vercel, import the GitHub repository with root `./`, preset Other, and keep `api/clocked.py` and `requirements.txt`. Set `CLOCKED_API_KEY` as a private environment variable (never commit it).
+4. Deploy, click Run Clocked Decision in Decision Studio, and verify a REAL CLOCKED API response. Then check Overview, T003, VoiceIQ continuation, Agent Studio and Feedback; those paths remain simulated beyond the SDK steps.
 5. Keep the project explicitly labelled as simulated and share it only with the intended audience.
 
 Do not copy a production API key into static JavaScript. The key must exist only in Vercel environment variables and server code. Read DEPLOY_REAL_CLOCKED.md for the exact steps and limitations.
@@ -63,3 +63,7 @@ This ZIP is a downloadable update to the GitHub repository. It does not prove a 
 ## Design principle
 
 Clocked shows **evidence, configured rules, candidate actions, uncertainty, and the final recommendation**. It does not expose or pretend to expose internal model thought traces. Owned modules retain authority over data, permissions, validation and the final action. In the actual product, the user confirms changes before any ticket creation or update.
+
+## Public API caution
+
+This version intentionally has no reviewer access code. Anyone accessing the public website can cause the server function to call the Clocked API. The API key is still private in Vercel, but that does not prevent misuse or unexpected API charges. Before sharing, apply deployment protection, platform edge rate limiting and budget controls, or restrict access through an authenticated gateway. Limit API traffic for `/api/clocked` and monitor usage.

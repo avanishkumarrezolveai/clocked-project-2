@@ -1,8 +1,7 @@
 'use strict';
 
 const DB=window.CLOCKED_DATA;
-// Browser never receives the Clocked API key. The reviewer's access code remains in memory only.
-let demoAccessCode='';
+// Browser never receives the Clocked API key. Requests use the Vercel server function.
 let liveRequestId=0;
 const $=id=>document.getElementById(id);
 const OFFERS=[...DB.incident_offers,...DB.service_offers];
@@ -88,12 +87,12 @@ async function doEvaluate(){
  state.decision=evaluate(state.utterance,getCase());state.step=0;state.assetId=null;
  state.apiResult=null;state.apiStatus='pending';render();
  const id=++liveRequestId;
- if(!demoAccessCode){state.apiStatus='access-needed';render();notify('Enter your demo access code to run real Clocked decisions');return}
+ 
  const choices=state.decision.candidates.filter(x=>x.o).map(x=>({id:x.o.offering_id,title:x.o.offering_name,text:String(x.o.description||'')+' '+String(x.o.synonyms||'')})).slice(0,8);
  // Always present a real, bounded catalog to the SDK; never fabricate an API decision.
  if(!choices.length){state.apiStatus='no-candidates';render();return}
  try{
-  const resp=await fetch('/api/clocked',{method:'POST',headers:{'Content-Type':'application/json','X-Demo-Access':demoAccessCode},body:JSON.stringify({utterance:state.utterance,candidates:choices})});
+  const resp=await fetch('/api/clocked',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({utterance:state.utterance,candidates:choices})});
   const result=await resp.json();if(id!==liveRequestId)return;
   if(!resp.ok){state.apiStatus='error';state.apiResult={error:result.error||('HTTP '+resp.status)};render();return}
   state.apiResult=result;state.apiStatus='live';
@@ -133,7 +132,7 @@ function renderStudio(){const d=state.decision;const c=getCase();
  content=`<section class="card"><div class="card-head"><h3>Clocked decision journey</h3><span class="pill blue">${esc(d.caseId||'CUSTOM INPUT')}</span></div>${base}${body}<div class="action-row">${state.step>0?button('← Previous','previous-step','btn ghost sm'):''}${state.step<3?button('Next decision →','next-step','btn sm'):''}</div></section>`
  }else content=`<section class="card"><div class="empty"><strong>Run a scenario to see Clocked's decision journey</strong>Input from the shared data will be evaluated against the configured catalog and user context.</div></section>`;
  return `${pageHeader('Decision Studio','CENTRAL INTELLIGENCE','Review the request, candidate offerings, owned assets, valid catalog hierarchy, existing tickets and next action. Every step identifies the evidence it uses.','<span class="pill purple">Evidence view</span>')}
- <section class="card" style="margin-bottom:17px"><div class="card-head"><h3>Scenario workspace</h3><span class="pill">${state.apiStatus==='live'?'Real Clocked API':state.apiStatus==='pending'?'Contacting Clocked':'API not yet verified'}</span></div><div class="grid cols3"><div class="formfield"><label for="scenario">Reference case</label><select class="field" id="scenario">${choices}</select></div><div class="formfield"><label for="demo-user">Synthetic user</label><select class="field" id="demo-user">${users}</select></div><div class="formfield"><label for="channel">Entry channel</label><select class="field" id="channel">${['VoiceIQ','Chatbot','Service Portal','Live Chat'].map(x=>`<option ${x===state.channel?'selected':''}>${x}</option>`).join('')}</select></div></div><div class="formfield" style="margin-top:16px"><label for="utterance">What does the user say?</label><textarea class="field" id="utterance" rows="2">${esc(state.utterance)}</textarea></div><div class="formfield" style="margin-top:12px"><label for="demo-access">Demo access code (not the Clocked API key)</label><input type="password" class="field" id="demo-access" autocomplete="off" placeholder="Enter access code set in Vercel" value="${esc(demoAccessCode)}"></div><div class="action-row">${button('✳ Run Clocked Decision','run-decision')}${button('Reset to T003','open-t003','btn ghost')}</div><p class="tiny" style="margin-top:10px">The inspector separates real API calls from local decision criteria. All operational actions remain simulated.</p></section>
+ <section class="card" style="margin-bottom:17px"><div class="card-head"><h3>Scenario workspace</h3><span class="pill">${state.apiStatus==='live'?'Real Clocked API':state.apiStatus==='pending'?'Contacting Clocked':'API not yet verified'}</span></div><div class="grid cols3"><div class="formfield"><label for="scenario">Reference case</label><select class="field" id="scenario">${choices}</select></div><div class="formfield"><label for="demo-user">Synthetic user</label><select class="field" id="demo-user">${users}</select></div><div class="formfield"><label for="channel">Entry channel</label><select class="field" id="channel">${['VoiceIQ','Chatbot','Service Portal','Live Chat'].map(x=>`<option ${x===state.channel?'selected':''}>${x}</option>`).join('')}</select></div></div><div class="formfield" style="margin-top:16px"><label for="utterance">What does the user say?</label><textarea class="field" id="utterance" rows="2">${esc(state.utterance)}</textarea></div><div class="action-row">${button('✳ Run Clocked Decision','run-decision')}${button('Reset to T003','open-t003','btn ghost')}</div><p class="tiny" style="margin-top:10px">The inspector separates real API calls from local decision criteria. All operational actions remain simulated.</p></section>
  ${content}${notice()}`}
 
 function renderTickets(){const records=state.tickets.filter(x=>state.ticketFilter==='All'||x.status===state.ticketFilter);const d=state.decision;const mm=d?.selected?mapping(d.selected.offering_id):null;
@@ -191,7 +190,7 @@ function renderInspector(){const d=state.decision;let timeline=[];if(d){timeline
  $('inspector-body').innerHTML=`<div class="inspector-group"><div class="mini-label">Active user context</div><div class="inspector-user"><div class="avatar">${esc(state.userId.slice(-2))}</div><div><strong>${esc(user().display_name)}</strong><small>${esc(state.userId)} · ${esc(user().department)}</small></div></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:12px"><span class="tag">${owned().length} devices</span><span class="tag">${esc(user().location)}</span></div></div>
  <div class="inspector-group"><div class="mini-label">Currently connected modules</div><div class="list" style="gap:6px">${['User Management','Ticket Management','Asset Management','Bot Knowledge'].map((m,i)=>`<div class="active-module ${d?'now':''}"><span>${i%2?'▤':'◈'}</span>${m}</div>`).join('')}</div></div>
  <div class="inspector-group"><div class="mini-label">Visible decision checkpoints</div>${d?`<div>${timeline.map(([t,s],i)=>`<div class="timeline-item"><div class="timeline-line"><div class="timeline-dot"></div><div class="timeline-stick"></div></div><div class="timeline-content"><strong>${t}</strong><p>${s}</p></div></div>`).join('')}</div>`:`<div class="empty" style="padding:5px 0;text-align:left;font-size:11px">Run a scenario to reveal the evidence used to recommend the next step.</div>`}</div>
- <div class="inspector-group"><div class="mini-label">Clocked API evidence</div><div class="trace-result"><strong>${state.apiStatus==='live'?'REAL CLOCKED API':state.apiStatus==='pending'?'CONTACTING CLOCKED':state.apiStatus==='error'?'API ERROR':'LOCAL DEMO'}</strong>${state.apiStatus==='live'?`<p>SDK methods: decide and rerank. Ranked offerings: ${(state.apiResult.offerings||[]).map(x=>esc(x.id)+' ('+esc(x.relevance_score)+')').join(', ')||'None selected'}</p><p>Intent result: ${esc(JSON.stringify(state.apiResult.intent||{}))}</p>`:state.apiStatus==='error'?`<p>${esc(state.apiResult?.error||'Request failed')}</p>`:`<p>${state.apiStatus==='access-needed'?'Enter the reviewer access code in Decision Studio.':'The catalog and workflow preview remain local until a successful SDK request.'}</p>`}</div></div>
+ <div class="inspector-group"><div class="mini-label">Clocked API evidence</div><div class="trace-result"><strong>${state.apiStatus==='live'?'REAL CLOCKED API':state.apiStatus==='pending'?'CONTACTING CLOCKED':state.apiStatus==='error'?'API ERROR':'LOCAL DEMO'}</strong>${state.apiStatus==='live'?`<p>SDK methods: decide and rerank. Ranked offerings: ${(state.apiResult.offerings||[]).map(x=>esc(x.id)+' ('+esc(x.relevance_score)+')').join(', ')||'None selected'}</p><p>Intent result: ${esc(JSON.stringify(state.apiResult.intent||{}))}</p>`:state.apiStatus==='error'?`<p>${esc(state.apiResult?.error||'Request failed')}</p>`:`<p>${'The catalog and workflow preview remain local until a successful SDK request.'}</p>`}</div></div>
  <div class="inspector-group" style="border:0"><div class="mini-label">Decision output</div><div class="trace-result"><strong>${d?'Recommendation prepared':'Awaiting scenario'}</strong><p>${d?esc(d.rec):'Select a test case in Decision Studio, or start the VoiceIQ journey.'}</p></div><p class="tiny" style="margin-top:10px">${d?`${esc(d.source)} · ${esc(d.caseId||'Custom phrase')}`:'Source: 46 reference scenarios from the synthetic workbook'}</p></div>`;
 }
 
@@ -245,7 +244,7 @@ $('main').addEventListener('change',e=>{
  else if(e.target.id==='ticket-filter'){state.ticketFilter=e.target.value;render()}
 });
 $('main').addEventListener('input',e=>{
- if(e.target.id==='demo-access')demoAccessCode=e.target.value;
+ 
  if(e.target.id==='utterance')state.utterance=e.target.value;
  if(e.target.id==='user-search')state.searchUsers=e.target.value;
  if(e.target.id==='catalog-search')state.searchCatalog=e.target.value;

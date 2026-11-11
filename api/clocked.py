@@ -1,7 +1,6 @@
 """Clocked Project 2 secure Vercel function. Synthetic catalog only.
 Reuse the same clocked-sdk 0.7.0 endpoints as Project 1.
 """
-import hmac
 import os
 from flask import Flask, jsonify, request
 
@@ -19,12 +18,8 @@ def error(message, status):
 @app.route("/api/clocked", methods=["POST"])
 def clocked():
     key = os.getenv("CLOCKED_API_KEY", "")
-    access = os.getenv("DEMO_ACCESS_TOKEN", "")
-    if not key or not access:
-        return error("Clocked is not configured. Set CLOCKED_API_KEY and DEMO_ACCESS_TOKEN in Vercel.", 503)
-    supplied = request.headers.get("X-Demo-Access", "")
-    if not supplied or not hmac.compare_digest(supplied, access):
-        return error("Demo access code is missing or incorrect.", 401)
+    if not key:
+        return error("Clocked is not configured. Set CLOCKED_API_KEY in Vercel.", 503)
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         return error("Expected a JSON object.", 400)
